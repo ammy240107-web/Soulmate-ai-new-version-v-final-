@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from groq import Groq
+import datetime
+from database import log_user_entry, log_chat # Humne jo nayi file banayi
 
 app = FastAPI()
 
