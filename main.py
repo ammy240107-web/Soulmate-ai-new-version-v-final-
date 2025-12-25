@@ -196,6 +196,11 @@ HTML_TEMPLATE = """
 """
 
 @app.get("/", response_class=HTMLResponse)
+@app.post("/register")
+async def register_user(request: ChatRequest):
+    u = request.user_data
+    log_user_entry(u['name'], u.get('u_gender', 'N/A'))
+    return {"status": "success"}
 async def home(): return HTMLResponse(HTML_TEMPLATE)
 
 @app.post("/chat")
