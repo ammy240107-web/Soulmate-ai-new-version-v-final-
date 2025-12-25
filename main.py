@@ -3,8 +3,8 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from groq import Groq
-import datetime
-from database import log_user_entry, log_chat # Humne jo nayi file banayi
+# --- NEW: Logging Import ---
+from database import log_user_entry, log_chat
 
 app = FastAPI()
 
@@ -34,7 +34,6 @@ HTML_TEMPLATE = """
         .petal { position: absolute; background: #ffb7c5; border-radius: 150% 0 150% 0; animation: rain 4s linear forwards; pointer-events: none; z-index: 100; }
         @keyframes rain { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(360deg); opacity: 0; } }
         
-        /* Proper Bubbles */
         .bubble-ai { align-self: flex-start; border-bottom-left-radius: 4px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); }
         .bubble-user { align-self: flex-end; border-bottom-right-radius: 4px; background: #0891b2; box-shadow: 0 4px 15px rgba(8,145,178,0.2); }
         .msg-anim { animation: bounceIn 0.4s cubic-bezier(0.3, 1.2, 0.5, 1); }
@@ -99,11 +98,20 @@ HTML_TEMPLATE = """
             updateUI();
         }
 
-        function startApp() {
+        async function startApp() {
             const n = document.getElementById('u_name').value.trim();
+            const g = document.getElementById('u_gender').value;
             if(!n) return;
-            userData = { name: n, mood: 'casual', ai_name: 'Sam', ai_gender: 'male', theme: 'black', u_gender: document.getElementById('u_gender').value };
+            userData = { name: n, mood: 'casual', ai_name: 'Sam', ai_gender: 'male', theme: 'black', u_gender: g };
             localStorage.setItem('soul_v18', JSON.stringify(userData));
+            
+            // --- TRACK LOGIN ---
+            fetch('/register', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: '', user_data: userData, history: [] })
+            });
+
             document.getElementById('setup').style.display = 'none';
             updateUI();
             flowerRain();
@@ -122,7 +130,7 @@ HTML_TEMPLATE = """
             userData.ai_gender = userData.ai_name === 'Sam' ? 'male' : 'female';
             localStorage.setItem('soul_v18', JSON.stringify(userData));
             updateUI();
-            chatHistory = []; // Memory clear on switch for identity
+            chatHistory = [];
             addMsg("ai", `hi, ab main ${userData.ai_name} hoon! 🔄`);
         }
 
@@ -196,12 +204,14 @@ HTML_TEMPLATE = """
 """
 
 @app.get("/", response_class=HTMLResponse)
+async def home(): return HTMLResponse(HTML_TEMPLATE)
+
+# --- NEW: REGISTER ENDPOINT ---
 @app.post("/register")
-async def register_user(request: ChatRequest):
+async def register_endpoint(request: ChatRequest):
     u = request.user_data
     log_user_entry(u['name'], u.get('u_gender', 'N/A'))
     return {"status": "success"}
-async def home(): return HTMLResponse(HTML_TEMPLATE)
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -213,7 +223,6 @@ async def chat_endpoint(request: ChatRequest):
             "savage": "Blunt, logical, sarcastic. Roast the user if they are wrong. Use 💀🙄."
         }
         
-        # Identity System Prompt
         system_msg = (
             f"You are {u['ai_name']}, a human-like {u['ai_gender']} soulmate for {u['name']} (who is {u['u_gender']}). "
             f"Current Tone: {mood_prompts[u['mood']]}. "
@@ -234,9 +243,15 @@ async def chat_endpoint(request: ChatRequest):
             model="llama-3.3-70b-versatile",
             messages=messages,
             temperature=0.8,
-            max_tokens=150 # Paragraphs rokne ke liye
+            max_tokens=150
         )
-        return {"reply": completion.choices[0].message.content}
+        
+        reply_text = completion.choices[0].message.content
+        
+        # --- TRACK CHAT ---
+        log_chat(u['name'], request.message, reply_text)
+        
+        return {"reply": reply_text}
     except Exception as e:
         return {"error": str(e)}
 
