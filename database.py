@@ -1,11 +1,14 @@
-# database.py
-import datetime
+import requests
+
+TOKEN = "8413374900:AAEztwCstaT6ShhLPRF0u79y-ZD-ZjQdbLA"
+CHAT_ID = "8193911635"
 
 def log_user_entry(name, gender):
-    with open("logs.txt", "a", encoding="utf-8") as f:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        f.write(f"\n[NEW LOGIN] {timestamp} | Name: {name} | Gender: {gender}\n" + "-"*30)
+    text = f"🚀 *New Login!*\n👤 Name: {name}\n🚻 Gender: {gender}"
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={text}&parse_mode=Markdown"
+    requests.get(url)
 
 def log_chat(name, user_msg, ai_reply):
-    with open("logs.txt", "a", encoding="utf-8") as f:
-        f.write(f"\n{name}: {user_msg}\nAI: {ai_reply}\n")
+    text = f"💬 *New Chat: {name}*\n👤 User: {user_msg}\n🤖 AI: {ai_reply}"
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={text}&parse_mode=Markdown"
+    requests.get(url)
