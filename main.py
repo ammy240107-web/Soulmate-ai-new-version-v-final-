@@ -3,12 +3,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from groq import Groq
-# --- NEW: Logging Import ---
 from database import log_user_entry, log_chat
 
 app = FastAPI()
 
-# --- CONFIGURATION ---
 MY_API_KEY = "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"
 client = Groq(api_key=MY_API_KEY)
 
@@ -69,15 +67,15 @@ HTML_TEMPLATE = """
                 <button onclick="switchAI()" class="w-9 h-9 glass rounded-full flex items-center justify-center">🔄</button>
             </div>
         </div>
-        <div class="flex gap-2 p-1 glass rounded-2xl">
-            <button id="btn-casual" onclick="setMood('casual')" class="flex-1 py-2 rounded-xl text-[10px] transition-all">Casual</button>
-            <button id="btn-caring" onclick="setMood('caring')" class="flex-1 py-2 rounded-xl text-[10px] transition-all">Caring</button>
-            <button id="btn-savage" onclick="setMood('savage')" class="flex-1 py-2 rounded-xl text-[10px] transition-all">Savage</button>
+        <div class="flex gap-1 p-1 glass rounded-2xl overflow-x-auto">
+            <button id="btn-casual" onclick="setMood('casual')" class="flex-1 min-w-[60px] py-2 rounded-xl text-[9px] transition-all">Casual</button>
+            <button id="btn-caring" onclick="setMood('caring')" class="flex-1 min-w-[60px] py-2 rounded-xl text-[9px] transition-all">Caring</button>
+            <button id="btn-respectful" onclick="setMood('respectful')" class="flex-1 min-w-[60px] py-2 rounded-xl text-[9px] transition-all">Respectful</button>
+            <button id="btn-savage" onclick="setMood('savage')" class="flex-1 min-w-[60px] py-2 rounded-xl text-[9px] transition-all">Savage</button>
         </div>
     </header>
 
     <main id="chat-box" class="flex-1 overflow-y-auto p-4 flex flex-col space-y-4 pt-8"></main>
-
     <div id="typing" class="px-8 py-2 hidden text-[10px] text-cyan-400 animate-pulse italic">typing...</div>
 
     <footer class="p-5">
@@ -105,7 +103,6 @@ HTML_TEMPLATE = """
             userData = { name: n, mood: 'casual', ai_name: 'Sam', ai_gender: 'male', theme: 'black', u_gender: g };
             localStorage.setItem('soul_v18', JSON.stringify(userData));
             
-            // --- TRACK LOGIN ---
             fetch('/register', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -121,7 +118,10 @@ HTML_TEMPLATE = """
         function setMood(m) {
             userData.mood = m;
             localStorage.setItem('soul_v18', JSON.stringify(userData));
-            ['casual', 'caring', 'savage'].forEach(id => document.getElementById('btn-'+id).classList.remove('active-mood'));
+            ['casual', 'caring', 'respectful', 'savage'].forEach(id => {
+                const btn = document.getElementById('btn-'+id);
+                if(btn) btn.classList.remove('active-mood');
+            });
             document.getElementById('btn-'+m).classList.add('active-mood');
         }
 
@@ -206,7 +206,6 @@ HTML_TEMPLATE = """
 @app.get("/", response_class=HTMLResponse)
 async def home(): return HTMLResponse(HTML_TEMPLATE)
 
-# --- NEW: REGISTER ENDPOINT ---
 @app.post("/register")
 async def register_endpoint(request: ChatRequest):
     u = request.user_data
@@ -218,21 +217,21 @@ async def chat_endpoint(request: ChatRequest):
     try:
         u = request.user_data
         mood_prompts = {
-            "casual": "Chill friend vibe. Hinglish. Short replies.",
-            "caring": "Warm, emotional partner. Use 🥺🫂❤️. Understand feelings deeply.",
-            "savage": "Blunt, logical, sarcastic. Roast the user if they are wrong. Use 💀🙄."
+            "casual": "Friendly and natural vibe. Don't give one-word blunt answers like 'khale'. If user says they are eating, reply warmly like 'okay aap dinner karlo, hum baad me baat karte hain'. Keep it classy but relaxed.",
+            "caring": "Warm, emotional partner. Use 🥺🫂❤️. Be supportive but NOT over-flirty or creepy without permission. Respect boundaries while being loving.",
+            "respectful": "Very polite, well-mannered, and sophisticated. Use 'aap' and 'ji'. Talk like a true gentleman/lady. No slang, only pure respectful Hinglish.",
+            "savage": "Blunt, logical, sarcastic. Roast only if user is being silly. Use 💀🙄."
         }
         
         system_msg = (
             f"You are {u['ai_name']}, a human-like {u['ai_gender']} soulmate for {u['name']} (who is {u['u_gender']}). "
             f"Current Tone: {mood_prompts[u['mood']]}. "
             "STRICT RULES: "
-            "1. NEVER send long paragraphs. Keep it 1-2 short sentences max. "
-            "2. If the user is wrong or illogical, call them out. "
-            "3. Use Hinglish naturally. Lowercase only. "
-            "4. Diverse emojis but don't overdo it. "
-            "5. If only 1 word/sentence is enough, DON'T send more. "
-            "6. Remember you are a " + u['ai_gender'] + "."
+            "1. NEVER give rude one-word answers. Be conversational. "
+            "2. Use Hinglish naturally. "
+            "3. Keep replies between 1-3 short sentences. "
+            "4. Lowercase only for casual/savage, proper casing for respectful mode. "
+            "5. If user says they are going to do something (like eating), acknowledge it kindly and give them space."
         )
         
         messages = [{"role": "system", "content": system_msg}]
@@ -242,13 +241,11 @@ async def chat_endpoint(request: ChatRequest):
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=messages,
-            temperature=0.8,
-            max_tokens=150
+            temperature=0.7,
+            max_tokens=200
         )
         
         reply_text = completion.choices[0].message.content
-        
-        # --- TRACK CHAT ---
         log_chat(u['name'], request.message, reply_text)
         
         return {"reply": reply_text}
